@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Backup CI/CD Pipeline</title>
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #060d1a;
+            --surface: #0d1829;
+            --surface-2: #111f33;
+            --border: #1a2d4a;
+            --border-light: #243b5e;
+            --text: #e2eaf5;
+            --text-muted: #7a90ad;
+            --text-dim: #4a607a;
+            --cyan: #22d3ee;
+            --cyan-dim: rgba(34,211,238,0.12);
+            --cyan-border: rgba(34,211,238,0.22);
+            --green: #34d399;
+            --green-dim: rgba(52,211,153,0.1);
+            --green-border: rgba(52,211,153,0.2);
+            --purple: #a78bfa;
+            --purple-dim: rgba(167,139,250,0.1);
+            --purple-border: rgba(167,139,250,0.2);
+            --orange: #fb923c;
+            --orange-dim: rgba(251,146,60,0.1);
+            --orange-border: rgba(251,146,60,0.2);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ── Background grid ── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(34,211,238,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(34,211,238,0.025) 1px, transparent 1px);
+            background-size: 48px 48px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 70% 50% at 50% 0%, rgba(34,211,238,0.07) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 90% 80%, rgba(167,139,250,0.05) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .page {
+            position: relative;
+            z-index: 1;
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 3rem 2rem 4rem;
+        }
+
+        /* ── Header ── */
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .header-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 1rem;
+            background: var(--cyan-dim);
+            border: 1px solid var(--cyan-border);
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--cyan);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 1.25rem;
+        }
+
+        .header-badge::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: var(--green);
+            border-radius: 50%;
+            box-shadow: 0 0 6px var(--green);
+        }
+
+        h1 {
+            font-size: 2.75rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #e2eaf5 30%, var(--cyan) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-sub {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            max-width: 540px;
+            margin: 0 auto 1.75rem;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.55rem 1.25rem;
+            background: var(--green-dim);
+            border: 1px solid var(--green-border);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--green);
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green);
+        }
+
+        /* ── Section label ── */
+        .section-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 1rem;
+        }
+
+        /* ── Pipeline flow ── */
+        .pipeline-section {
+            margin-bottom: 2.5rem;
+        }
+
+        .pipeline {
+            display: flex;
+            align-items: stretch;
+            gap: 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        .pipeline-step {
+            flex: 1;
+            padding: 1.5rem 1.25rem;
+            text-align: center;
+            position: relative;
+            border-right: 1px solid var(--border);
+        }
+
+        .pipeline-step:last-child { border-right: none; }
+
+        .pipeline-step::after {
+            content: '→';
+            position: absolute;
+            right: -11px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1rem;
+            color: var(--border-light);
+            z-index: 2;
+        }
+
+        .pipeline-step:last-child::after { display: none; }
+
+        .step-num {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--surface-2);
+            border: 1px solid var(--border-light);
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 0.75rem;
+        }
+
+        .step-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 0.75rem;
+        }
+
+        .step-icon svg { width: 22px; height: 22px; }
+
+        .step-icon.cyan   { background: var(--cyan-dim);   border: 1px solid var(--cyan-border);   }
+        .step-icon.cyan   svg { stroke: var(--cyan); }
+        .step-icon.purple { background: var(--purple-dim); border: 1px solid var(--purple-border); }
+        .step-icon.purple svg { stroke: var(--purple); }
+        .step-icon.orange { background: var(--orange-dim); border: 1px solid var(--orange-border); }
+        .step-icon.orange svg { stroke: var(--orange); }
+        .step-icon.green  { background: var(--green-dim);  border: 1px solid var(--green-border);  }
+        .step-icon.green  svg { stroke: var(--green); }
+
+        .step-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 0.25rem;
+        }
+
+        .step-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* ── Two-column grid ── */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+            margin-bottom: 1.25rem;
+        }
+
+        /* ── Card ── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-title span {
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+        }
+
+        /* ── Tech stack ── */
+        .tech-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+
+        .tech-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.65rem 0.875rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .tech-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .tech-name {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text);
+            flex: 1;
+        }
+
+        .tech-role {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        /* ── Info rows ── */
+        .info-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .info-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .info-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .info-icon svg { width: 15px; height: 15px; }
+
+        .info-label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-bottom: 0.1rem;
+        }
+
+        .info-value {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        /* ── Workflow card (full width) ── */
+        .workflow-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1.5rem;
+        }
+
+        .workflow-steps {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        .wf-step {
+            padding: 1rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .wf-step-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .wf-num {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 0.65rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .wf-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .wf-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        /* ── Footer ── */
+        .footer {
+            margin-top: 2.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .footer-left {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+
+        .footer-left strong { color: var(--text-muted); font-weight: 600; }
+
+        .footer-tags {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .tag {
+            padding: 0.3rem 0.7rem;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        @media (max-width: 680px) {
+            h1 { font-size: 2rem; }
+            .pipeline { flex-direction: column; }
+            .pipeline-step { border-right: none; border-bottom: 1px solid var(--border); }
+            .pipeline-step:last-child { border-bottom: none; }
+            .pipeline-step::after { content: '↓'; right: auto; left: 50%; top: auto; bottom: -13px; transform: translateX(-50%); }
+            .grid-2 { grid-template-columns: 1fr; }
+            .workflow-steps { grid-template-columns: 1fr; }
+            .footer { flex-direction: column; gap: 1rem; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+
+    <!-- ── Header ── -->
+    <header class="header">
+        <div class="header-badge">
+            <span>DevOps Project</span>
+        </div>
+        <h1>Docker Backup<br>CI/CD Pipeline</h1>
+        <p class="header-sub">
+            An automated pipeline that builds, backs up, and deploys Docker images
+            using GitHub Actions, Docker Hub, and AWS EC2.
+        </p>
+        <div class="status-pill">
+            <div class="dot"></div>
+            Application Running Successfully
+        </div>
+    </header>
+
+    <!-- ── Pipeline flow ── -->
+    <section class="pipeline-section">
+        <p class="section-label">Automated Pipeline Flow</p>
+        <div class="pipeline">
+
+            <div class="pipeline-step">
+                <div class="step-num">1</div>
+                <div class="step-icon cyan">
+                    <svg fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/>
+                    </svg>
+                </div>
+                <div class="step-title">Code Push</div>
+                <div class="step-desc">Developer pushes to GitHub repository</div>
+            </div>
+
+            <div class="pipeline-step">
+                <div class="step-num">2</div>
+                <div class="step-icon purple">
+                    <svg fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z"/>
+                    </svg>
+                </div>
+                <div class="step-title">CI Triggered</div>
+                <div class="step-desc">GitHub Actions workflow starts automatically</div>
+            </div>
+
+            <div class="pipeline-step">
+                <div class="step-num">3</div>
+                <div class="step-icon cyan">
+                    <svg fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 0 1 2.25-2.25h7.5A2.25 2.25 0 0 1 18 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 0 0 3.75 9v.878m14.5-3A2.25 2.25 0 0 1 20.25 9v.878m0 0c.235-.083.487-.128.75-.128h.75m-18 0h.75c.263 0 .515.045.75.128M12 10.5a14.94 14.94 0 0 1-3.6.57"/>
+                    </svg>
+                </div>
+                <div class="step-title">Docker Build</div>
+                <div class="step-desc">Image built &amp; tagged from Dockerfile</div>
+            </div>
+
+            <div class="pipeline-step">
+                <div class="step-num">4</div>
+                <div class="step-icon orange">
+                    <svg fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5a2.25 2.25 0 0 0-2.25 2.25v9a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H15M9 12l3 3m0 0 3-3m-3 3V2.25"/>
+                    </svg>
+                </div>
+                <div class="step-title">Backup to Hub</div>
+                <div class="step-desc">Image pushed to Docker Hub registry</div>
+            </div>
+
+            <div class="pipeline-step">
+                <div class="step-num">5</div>
+                <div class="step-icon green">
+                    <svg fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 0 1-3-3m3 3a3 3 0 1 0 6 0m-6 0H2.25m11.25 0a3 3 0 0 1-3-3m3 3a3 3 0 1 0 6 0m0 0h1.5a.75.75 0 0 0 .75-.75V8.75"/>
+                    </svg>
+                </div>
+                <div class="step-title">Deploy to EC2</div>
+                <div class="step-desc">Container deployed &amp; running on AWS EC2</div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- ── Two columns: Tech Stack + Project Info ── -->
+    <div class="grid-2">
+
+        <!-- Tech Stack -->
+        <div class="card">
+            <div class="card-title">Technology Stack <span>Tools Used</span></div>
+            <div class="tech-list">
+                <div class="tech-item">
+                    <div class="tech-dot" style="background:var(--purple)"></div>
+                    <div class="tech-name">GitHub Actions</div>
+                    <div class="tech-role">CI/CD Automation</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-dot" style="background:var(--cyan)"></div>
+                    <div class="tech-name">Docker</div>
+                    <div class="tech-role">Containerization</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-dot" style="background:var(--orange)"></div>
+                    <div class="tech-name">Docker Hub</div>
+                    <div class="tech-role">Image Registry / Backup</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-dot" style="background:var(--green)"></div>
+                    <div class="tech-name">AWS EC2</div>
+                    <div class="tech-role">Cloud Deployment</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-dot" style="background:#94a3b8"></div>
+                    <div class="tech-name">Nginx</div>
+                    <div class="tech-role">Web Server</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Project Info -->
+        <div class="card">
+            <div class="card-title">Project Details <span>Config</span></div>
+            <div class="info-list">
+
+                <div class="info-row">
+                    <div class="info-icon" style="background:var(--cyan-dim); border:1px solid var(--cyan-border)">
+                        <svg fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="var(--cyan)">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="info-label">Repository</div>
+                        <div class="info-value">docker-backup-cicd</div>
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-icon" style="background:var(--purple-dim); border:1px solid var(--purple-border)">
+                        <svg fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="var(--purple)">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="info-label">CI Trigger</div>
+                        <div class="info-value">Push to main branch</div>
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-icon" style="background:var(--orange-dim); border:1px solid var(--orange-border)">
+                        <svg fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="var(--orange)">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5a2.25 2.25 0 0 0-2.25 2.25v9a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H15M9 12l3 3m0 0 3-3m-3 3V2.25"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="info-label">Registry</div>
+                        <div class="info-value">Docker Hub (versioned tags)</div>
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-icon" style="background:var(--green-dim); border:1px solid var(--green-border)">
+                        <svg fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="var(--green)">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 0 1-3-3m3 3a3 3 0 1 0 6 0m-6 0H2.25m11.25 0a3 3 0 0 1-3-3m3 3a3 3 0 1 0 6 0m0 0h1.5a.75.75 0 0 0 .75-.75V8.75"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="info-label">Deployment Target</div>
+                        <div class="info-value">AWS EC2 — Ubuntu Server</div>
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-icon" style="background:rgba(148,163,184,0.1); border:1px solid rgba(148,163,184,0.2)">
+                        <svg fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="#94a3b8">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6Z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="info-label">Version</div>
+                        <div class="info-value">v1.0 — Initial Release</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ── Workflow breakdown ── -->
+    <div class="workflow-card">
+        <div class="card-title" style="margin-bottom:1.25rem">GitHub Actions Workflow <span>Steps Breakdown</span></div>
+        <div class="workflow-steps">
+
+            <div class="wf-step">
+                <div class="wf-step-header">
+                    <div class="wf-num" style="background:var(--cyan-dim); color:var(--cyan)">1</div>
+                    <div class="wf-title">Checkout &amp; Setup</div>
+                </div>
+                <div class="wf-desc">Clone the repository and configure the Docker Buildx environment for multi-platform builds.</div>
+            </div>
+
+            <div class="wf-step">
+                <div class="wf-step-header">
+                    <div class="wf-num" style="background:var(--purple-dim); color:var(--purple)">2</div>
+                    <div class="wf-title">Build Docker Image</div>
+                </div>
+                <div class="wf-desc">Build the Docker image from the project Dockerfile and tag it with the commit SHA and latest.</div>
+            </div>
+
+            <div class="wf-step">
+                <div class="wf-step-header">
+                    <div class="wf-num" style="background:var(--orange-dim); color:var(--orange)">3</div>
+                    <div class="wf-title">Push to Docker Hub</div>
+                </div>
+                <div class="wf-desc">Authenticate and push the tagged image to Docker Hub as a versioned backup of the build.</div>
+            </div>
+
+            <div class="wf-step">
+                <div class="wf-step-header">
+                    <div class="wf-num" style="background:var(--green-dim); color:var(--green)">4</div>
+                    <div class="wf-title">SSH into EC2</div>
+                </div>
+                <div class="wf-desc">Securely connect to the AWS EC2 instance using an SSH key stored as a GitHub Actions secret.</div>
+            </div>
+
+            <div class="wf-step">
+                <div class="wf-step-header">
+                    <div class="wf-num" style="background:var(--cyan-dim); color:var(--cyan)">5</div>
+                    <div class="wf-title">Pull &amp; Restart</div>
+                </div>
+                <div class="wf-desc">Pull the latest image from Docker Hub and restart the container to serve the updated application.</div>
+            </div>
+
+            <div class="wf-step">
+                <div class="wf-step-header">
+                    <div class="wf-num" style="background:var(--green-dim); color:var(--green)">6</div>
+                    <div class="wf-title">Health Check</div>
+                </div>
+                <div class="wf-desc">Verify the container is running and the application is reachable before marking the pipeline green.</div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ── Footer ── -->
+    <footer class="footer">
+        <div class="footer-left">
+            Built with <strong>GitHub Actions</strong> · <strong>Docker</strong> · <strong>AWS EC2</strong>
+        </div>
+        <div class="footer-tags">
+            <span class="tag" style="background:var(--cyan-dim); color:var(--cyan)">CI/CD</span>
+            <span class="tag" style="background:var(--purple-dim); color:var(--purple)">DevOps</span>
+            <span class="tag" style="background:var(--green-dim); color:var(--green)">Cloud</span>
+        </div>
+    </footer>
+
+</div>
+</body>
+</html>
