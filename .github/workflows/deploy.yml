@@ -1,5 +1,5 @@
 
-name: Docker Image Backup Pipeline
+name: Docker Image Backup and EC2 Deployment
 
 on:
   push:
@@ -20,14 +20,14 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Login to GitHub Container Registry
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set lowercase image name
+      - name: Set Image Name
         run: |
           echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
@@ -35,17 +35,38 @@ jobs:
         run: |
           docker build -t $IMAGE_NAME:latest .
 
-      - name: Add Version Tag
+      - name: Add Commit Tag
         run: |
           docker tag $IMAGE_NAME:latest $IMAGE_NAME:${GITHUB_SHA}
 
-      - name: Push Docker Images
+      - name: Push Images to GHCR
         run: |
           docker push $IMAGE_NAME:latest
           docker push $IMAGE_NAME:${GITHUB_SHA}
 
-      - name: Display Published Images
-        run: |
-          echo "Published images:"
-          echo "$IMAGE_NAME:latest"
-          echo "$IMAGE_NAME:${GITHUB_SHA}"
+  deploy-to-ec2:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            IMAGE="ghcr.io/vijaykardak96k-dev/gitaction-1:latest"
+
+            docker pull $IMAGE
+
+            docker stop backup-app || true
+            docker rm backup-app || true
+
+            docker run -d \
+              --name backup-app \
+              --restart unless-stopped \
+              -p 80:80 \
+              $IMAGE
+
+            docker image prune -f
