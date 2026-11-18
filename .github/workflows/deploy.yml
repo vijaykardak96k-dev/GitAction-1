@@ -1,0 +1,51 @@
+
+name: Docker Image Backup Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set lowercase image name
+        run: |
+          echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+      - name: Build Docker Image
+        run: |
+          docker build -t $IMAGE_NAME:latest .
+
+      - name: Add Version Tag
+        run: |
+          docker tag $IMAGE_NAME:latest $IMAGE_NAME:${GITHUB_SHA}
+
+      - name: Push Docker Images
+        run: |
+          docker push $IMAGE_NAME:latest
+          docker push $IMAGE_NAME:${GITHUB_SHA}
+
+      - name: Display Published Images
+        run: |
+          echo "Published images:"
+          echo "$IMAGE_NAME:latest"
+          echo "$IMAGE_NAME:${GITHUB_SHA}"
